@@ -1,0 +1,94 @@
+---
+# tasks file for testproject
+
+- hosts: '{{ target }}'
+  tags: main
+  become: true
+  tasks:
+
+  - name: ensures testproject dir exists
+    file: 
+      path: /root/testproject
+      state: directory
+
+
+
+
+  - name: install the latest version of yum-utils
+    yum:
+      name: 
+        - yum-utils
+      state: present
+
+
+  - name: check if docker installed with version 18+
+    shell: docker --version  | cut -c 16-17
+    register: docker_version 
+    changed_when: False
+
+
+  # - name: print debug
+  #   debug:
+  #     msg: "{{ docker_version }}"
+
+
+  - name: Set up the repository for docker
+    shell: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    when: (docker_version.stdout | int < 18) or (docker_version.stderr != "")
+    
+
+  - name: Install packages for docker
+    yum:
+      name:
+        - docker-ce 
+        - docker-ce-cli 
+        - containerd.io 
+        - docker-buildx-plugin 
+        - docker-compose-plugin
+      state: present
+    when: (docker_version.stdout | int < 18) or (docker_version.stderr != "")
+
+
+  - name: Ensure docker service is started
+    systemd:
+      state: started
+      name: docker
+
+
+  - name: check if container started
+    shell: docker container ls | grep testproject | cut -c 16-26
+    register: docker_contanier_running
+    changed_when: False
+
+  - name: Copy Dockerfile
+    copy:
+      src: /root/testproject/Dockerfile
+      dest: /root/testproject/Dockerfile
+    when: (docker_contanier_running.stdout != "testproject")
+
+  - name: Copy service file
+    copy:
+      src: /root/testproject/flaskservice.py
+      dest: /root/testproject/flaskservice.py
+    when: (docker_contanier_running.stdout != "testproject")
+
+
+
+  # - name: print debug
+  #   debug:
+  #     msg: "{{ docker_contanier_running.stdout }}"
+
+  - name: Build conainer
+    shell: docker build -t testproject .
+    args:
+      chdir: /root/testproject
+    when: (docker_contanier_running.stdout != "testproject")
+ 
+
+
+
+  - name: start conainer
+    shell: docker run -dp 8081:8080 testproject
+    when: (docker_contanier_running.stdout != "testproject")
+
+    
