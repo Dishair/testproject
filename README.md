@@ -17,7 +17,7 @@
 
 
 ## **Running with docker**
-=============================
+
 ## **Prerequisites**
 - Docker
 
